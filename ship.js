@@ -12,6 +12,7 @@
     const STOP_TIME = 180000; // ms
 
     const SPEED_MPS = SPEED_KMH / 3.6;
+    const UPDATE_DT = 1 / 60;
 
     const SHIPS = [
 
@@ -52,21 +53,19 @@
             sum += ship.chance;
 
             if (r <= sum) {
+
                 return ship;
+
             }
 
         }
 
         return SHIPS[0];
-
     }
 
-    function distance(a, b) {
+    function dist(a, b) {
 
-        return geofs.utils.llaDistanceInMeters(
-            a,
-            b
-        );
+        return geofs.utils.llaDistanceInMeters(a, b);
 
     }
 
@@ -94,12 +93,11 @@
             [p0, p1, p2],
             { u, v, n }
         );
-
     }
 
-    function createCollision() {
+    function makeCollision() {
 
-        const collisionTriangles = [];
+        const tris = [];
 
         const RADIUS = 1000;
         const SEGMENTS = 96;
@@ -107,14 +105,12 @@
         for (let i = 0; i < SEGMENTS; i++) {
 
             const a0 =
-                (i / SEGMENTS) *
-                Math.PI * 2;
+                i / SEGMENTS * Math.PI * 2;
 
             const a1 =
-                ((i + 1) / SEGMENTS) *
-                Math.PI * 2;
+                (i + 1) / SEGMENTS * Math.PI * 2;
 
-            collisionTriangles.push(
+            tris.push(
 
                 tri(
 
@@ -146,49 +142,7 @@
 
         }
 
-        return {
-
-            name: "SHIP_COLLISION",
-
-            type: 100,
-
-            url: "",
-
-            location: [0, 0, 0],
-
-            llaLocation: [0, 0, 0],
-
-            htr: [0, 0, 0],
-
-            rotateModelOnly: false,
-
-            scale: 1,
-
-            metricOffset: [0, 0, 0],
-
-            collisionRadius: RADIUS,
-
-            collisionTriangles,
-
-            options: {}
-
-        };
-
-    }
-
-    function createModel(type) {
-
-        return scene.primitives.add(
-
-            Cesium.Model.fromGltf({
-
-                url: type.url,
-
-                scale: type.scale
-
-            })
-
-        );
+        return tris;
 
     }
 
@@ -204,7 +158,13 @@
 
     const ships = [];
 
-    for (const feature of data.features) {
+    for (
+
+        const feature
+
+        of data.features
+
+    ) {
 
         if (
 
@@ -221,9 +181,9 @@
         const pts =
             feature.geometry.coordinates;
 
-        const cumulative = [0];
+        let total = 0;
 
-        let totalLength = 0;
+        const cumulative = [0];
 
         for (
 
@@ -235,7 +195,7 @@
 
         ) {
 
-            totalLength += distance(
+            total += dist(
 
                 [
 
@@ -259,9 +219,7 @@
 
             );
 
-            cumulative.push(
-                totalLength
-            );
+            cumulative.push(total);
 
         }
 
@@ -269,7 +227,7 @@
 
             let d = 0;
 
-            d < totalLength;
+            d < total;
 
             d += SHIP_SPACING
 
@@ -279,11 +237,7 @@
 
             while (
 
-                seg < cumulative.length - 1 &&
-
-                cumulative[
-                    seg + 1
-                ] < d
+                cumulative[seg + 1] < d
 
             ) {
 
@@ -291,48 +245,18 @@
 
             }
 
-            const segmentLength =
-
-                cumulative[
-                    seg + 1
-                ] -
-
-                cumulative[
-                    seg
-                ];
-
-            const t =
-
-                segmentLength > 0
-
-                    ?
-
-                    (
-
-                        d -
-
-                        cumulative[
-                            seg
-                        ]
-
-                    ) /
-
-                    segmentLength
-
-                    :
-
-                    0;
+            const shipType =
+                chooseShip();
 
             ships.push({
 
-                type:
-                    chooseShip(),
+                type: shipType,
 
                 points: pts,
 
                 segment: seg,
 
-                t,
+                offset: 0,
 
                 forward: true,
 
@@ -350,27 +274,49 @@
 
     }
 
-    console.log(
-
-        ships.length +
-
-        " 隻準備完了"
-
-    );
-
     function spawn(ship) {
 
-        ship.model =
+        ship.model = scene.primitives.add(
 
-            createModel(
+            Cesium.Model.fromGltf({
 
-                ship.type
+                url: ship.type.url,
 
-            );
+                scale: ship.type.scale
 
-        ship.collision =
+            })
 
-            createCollision();
+        );
+
+        ship.collision = {
+
+            name: "SHIP",
+
+            type: 100,
+
+            url: "",
+
+            location: [0, 0, 0],
+
+            llaLocation: [0, 0, 0],
+
+            htr: [0, 0, 0],
+
+            rotateModelOnly: false,
+
+            scale: 1,
+
+            metricOffset: [0, 0, 0],
+
+            collisionRadius: 1000,
+
+            collisionTriangles:
+
+                makeCollision(),
+
+            options: {}
+
+        };
 
         geofs.objects.objectList.push(
 
@@ -382,11 +328,7 @@
 
     function remove(ship) {
 
-        if (
-
-            ship.model
-
-        ) {
+        if (ship.model) {
 
             scene.primitives.remove(
 
@@ -398,11 +340,7 @@
 
         }
 
-        if (
-
-            ship.collision
-
-        ) {
+        if (ship.collision) {
 
             const i =
 
@@ -430,25 +368,7 @@
 
     }
 
-    let lastTime =
-        performance.now();
-
     function update() {
-
-        const now =
-            performance.now();
-
-        const dt =
-
-            (
-
-                now -
-
-                lastTime
-
-            ) / 1000;
-
-        lastTime = now;
 
         const player =
 
@@ -462,62 +382,49 @@
 
         ) {
 
-            const pts =
-                ship.points;
+            const pts = ship.points;
 
-            const currentPoint =
+            const p = pts[ship.segment];
 
-                pts[
-                    ship.segment
-                ];
+            const pos = [
 
-            const distToPlayer =
+                p[1],
 
-                distance(
+                p[0],
 
-                    player,
+                0
 
-                    [
+            ];
 
-                        currentPoint[1],
+            const d = dist(
 
-                        currentPoint[0],
+                player,
 
-                        0
+                pos
 
-                    ]
-
-                );
+            );
 
             if (
 
-                distToPlayer >
-
-                DISPLAY_DISTANCE
+                d < DISPLAY_DISTANCE
 
             ) {
 
-                remove(
+                if (
 
-                    ship
+                    !ship.model
 
-                );
+                ) {
+
+                    spawn(ship);
+
+                }
+
+            } else {
+
+                remove(ship);
 
                 continue;
-
-            }
-
-            if (
-
-                !ship.model
-
-            ) {
-
-                spawn(
-
-                    ship
-
-                );
 
             }
 
@@ -545,31 +452,55 @@
 
                 }
 
-            } else {
+                continue;
 
-                const nextIndex =
+            }
+
+            ship.offset +=
+
+                SPEED_MPS *
+
+                UPDATE_DT;
+
+            while (
+
+                ship.offset > 50
+
+            ) {
+
+                ship.offset -= 50;
+
+                ship.segment +=
 
                     ship.forward
 
-                        ?
+                        ? 1
 
-                        ship.segment + 1
-
-                        :
-
-                        ship.segment - 1;
-
-                const nextPoint =
-
-                    pts[
-                        nextIndex
-                    ];
+                        : -1;
 
                 if (
 
-                    !nextPoint
+                    ship.segment >=
+
+                    pts.length - 1 ||
+
+                    ship.segment <= 0
 
                 ) {
+
+                    ship.segment = Math.max(
+
+                        0,
+
+                        Math.min(
+
+                            pts.length - 1,
+
+                            ship.segment
+
+                        )
+
+                    );
 
                     ship.waiting = true;
 
@@ -577,76 +508,119 @@
 
                         Date.now();
 
-                } else {
+                }
 
-                    const segmentLength =
+            }
 
-                        distance(
+            const cur =
+                pts[ship.segment];
 
-                            [
+            const next =
+                pts[
+                    ship.forward
 
-                                currentPoint[1],
+                        ? Math.min(
 
-                                currentPoint[0],
+                              pts.length - 1,
 
-                                0
+                              ship.segment + 1
 
-                            ],
+                          )
 
-                            [
+                        : Math.max(
 
-                                nextPoint[1],
+                              0,
 
-                                nextPoint[0],
+                              ship.segment - 1
 
-                                0
+                          )
 
-                            ]
+                ];
 
-                        );
+            const lon = cur[0];
+            const lat = cur[1];
 
-                    ship.t +=
+            const heading = Math.atan2(
 
-                        (
+                next[0] - cur[0],
 
-                            SPEED_MPS *
+                next[1] - cur[1]
 
-                            dt
+            );
 
-                        ) /
+            const h =
+                globe.getHeight(
 
-                        segmentLength;
+                    Cesium.Cartographic.fromDegrees(
 
-                    while (
+                        lon,
 
-                        ship.t >= 1
+                        lat
 
-                    ) {
+                    )
 
-                        ship.t -= 1;
+                ) || 0;
 
-                        ship.segment +=
+            const matrix =
 
-                            ship.forward
+                Cesium.Transforms.headingPitchRollToFixedFrame(
 
-                                ? 1
+                    Cesium.Cartesian3.fromDegrees(
 
-                                : -1;
+                        lon,
 
-                        if (
+                        lat,
 
-                            ship.segment <= 0 ||
+                        h
 
-                            ship.segment >=
+                    ),
 
-                            pts.length - 1
+                    new Cesium.HeadingPitchRoll(
 
-                        ) {
+                        heading,
 
-                            ship.segment = Math.max(
+                        0,
 
-                                0,
+                        0
 
-                                Math.min(
+                    )
 
-                                    pts.length
+                );
+
+            ship.model.modelMatrix =
+
+                matrix;
+
+            ship.collision.location = [
+
+                lat,
+
+                lon,
+
+                h + 22
+
+            ];
+
+            ship.collision.llaLocation = [
+
+                lat,
+
+                lon,
+
+                h + 22
+
+            ];
+
+        }
+
+        requestAnimationFrame(
+
+            update
+
+        );
+
+    }
+
+    update();
+
+})();
