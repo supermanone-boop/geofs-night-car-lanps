@@ -49,7 +49,13 @@
     console.log("線路データ取得中...");
 
     const data = await fetch(
-        "https://raw.githubusercontent.com/supermanone-boop/model/main/3export.geojson"
+        "https://raw.githubusercontent.com/supermanone-boop/model/main/3export.geojson",
+"https://raw.githubusercontent.com/supermanone-boop/model/main/sfo1.geojson",
+"https://raw.githubusercontent.com/supermanone-boop/model/main/sfo2export.geojson",
+"https://raw.githubusercontent.com/supermanone-boop/model/main/sfo3export.geojson",
+"https://raw.githubusercontent.com/supermanone-boop/model/main/sfo4export.geojson",
+"https://raw.githubusercontent.com/supermanone-boop/model/main/sfo5export.geojson"
+
     ).then(r => r.json());
 
     const rawRailways = data.features.filter(
